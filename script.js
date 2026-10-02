@@ -531,3 +531,258 @@
 
   lazyImages.forEach(function (img) { observer.observe(img); });
 })();
+
+/* ============================================================
+   8. LANGUAGE SWITCHER — Uniswap Country Dialog (Google Translate)
+   ============================================================ */
+(function initLangSwitcher() {
+
+  /* ── Lista completa de países ISO ── */
+  var CODES = 'AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS XK YE YT ZA ZM ZW'.split(' ');
+
+  /* ── Mapeamento País -> Idioma (Google Translate) ── */
+  var LANG_MAP = {
+    BR:'pt', PT:'pt', MZ:'pt', AO:'pt', CV:'pt',
+    US:'en', GB:'en', AU:'en', CA:'en', IE:'en', NZ:'en',
+    ES:'es', MX:'es', AR:'es', CO:'es', CL:'es', PE:'es',
+    FR:'fr', BE:'fr', CH:'fr',
+    DE:'de', AT:'de',
+    IT:'it',
+    JP:'ja',
+    CN:'zh-CN', TW:'zh-TW', HK:'zh-TW',
+    KR:'ko',
+    RU:'ru',
+    PL:'pl',
+    NL:'nl',
+    SE:'sv', NO:'no', DK:'da', FI:'fi',
+    TR:'tr',
+    SA:'ar', AE:'ar', EG:'ar',
+    IN:'hi',
+    ID:'id',
+    TH:'th',
+    VN:'vi'
+  };
+
+  var SOURCE_LANG = 'pt';
+  var STORAGE_KEY = 'kobra-lang-country';
+  var FLAG_BASE   = 'https://hatscripts.github.io/circle-flags/flags/';
+
+  /* ── Helpers ── */
+  function flagUrl(code) {
+    return FLAG_BASE + code.toLowerCase() + '.svg';
+  }
+
+  function getLangLabel(code) {
+    var lang = LANG_MAP[code] || 'en';
+    return lang.substring(0, 2).toUpperCase();
+  }
+
+  function normalize(s) {
+    return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+
+  function buildCountries() {
+    var userLocale = navigator.language || 'en';
+    var names = null;
+    try { names = new Intl.DisplayNames([userLocale], { type: 'region' }); } catch(e) {}
+    var list = CODES.map(function(code) {
+      var name = code;
+      try { name = (names && names.of(code)) || code; } catch(e) {}
+      return { code: code, name: name };
+    });
+    list.sort(function(a, b) { return a.name.localeCompare(b.name, userLocale); });
+    return list;
+  }
+
+  /* ── Google Translate ── */
+  var gtLoaded = false;
+
+  function loadGoogleTranslate() {
+    if (gtLoaded || document.getElementById('gt-script')) { gtLoaded = true; return; }
+    gtLoaded = true;
+
+    var holder = document.createElement('div');
+    holder.id = 'google_translate_element';
+    holder.className = 'notranslate';
+    holder.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden';
+    document.body.appendChild(holder);
+
+    var style = document.createElement('style');
+    style.textContent =
+      '.goog-te-banner-frame, .VIpgJd-ZVi9od-ORHb-OEVmcd, iframe.skiptranslate { display:none!important; }' +
+      'body { top:0!important; position:static!important; }' +
+      '.goog-tooltip, #goog-gt-tt, .VIpgJd-ZVi9od-SmfZ-OEVmcd { display:none!important; }' +
+      '.goog-text-highlight { background:none!important; box-shadow:none!important; }';
+    document.head.appendChild(style);
+
+    window.googleTranslateElementInit = function() {
+      new window.google.translate.TranslateElement(
+        { pageLanguage: SOURCE_LANG, autoDisplay: false },
+        'google_translate_element'
+      );
+    };
+
+    var script = document.createElement('script');
+    script.id = 'gt-script';
+    script.async = true;
+    script.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+    document.body.appendChild(script);
+  }
+
+  function setGoogleLang(target) {
+    var host = window.location.hostname;
+    function writeCookie(val, expire) {
+      var exp = expire ? '; expires=Thu, 01 Jan 1970 00:00:00 GMT' : '';
+      document.cookie = 'googtrans=' + val + '; path=/' + exp;
+      document.cookie = 'googtrans=' + val + '; path=/; domain=.' + host + exp;
+    }
+    if (!target || target === SOURCE_LANG) {
+      writeCookie('', true);
+    } else {
+      writeCookie('/' + SOURCE_LANG + '/' + target, false);
+    }
+    window.location.reload();
+  }
+
+  /* ── DOM refs ── */
+  var langBtn   = document.getElementById('langBtn');
+  var langFlag  = document.getElementById('langFlag');
+  var langCode  = document.getElementById('langCode');
+  var modal     = document.getElementById('langModal');
+  var modalBox  = document.getElementById('langModalBox');
+  var closeBtn  = document.getElementById('langModalClose');
+  var searchIn  = document.getElementById('langSearch');
+  var langList  = document.getElementById('langList');
+
+  if (!langBtn || !modal) return;
+
+  /* ── State ── */
+  var countries    = buildCountries();
+  var selected     = 'BR';
+  var prevOverflow = '';
+
+  // Restaura escolha salva ou lê cookie existente
+  try {
+    var saved = localStorage.getItem(STORAGE_KEY);
+    if (saved && CODES.indexOf(saved) !== -1) {
+      selected = saved;
+    } else {
+      // detecta cookie do google translate se houver
+      var match = document.cookie.match(/googtrans=\/[^/]+\/([^;]+)/);
+      if (match && match[1]) {
+        var langFound = match[1];
+        if (langFound === 'en') selected = 'US';
+        else if (langFound === 'es') selected = 'ES';
+        else if (langFound === 'pt') selected = 'BR';
+      }
+    }
+  } catch(e) {}
+
+  /* ── Renderiza botão na navbar ── */
+  function updateBtnUI(code) {
+    if (langFlag) {
+      langFlag.innerHTML =
+        '<img src="' + flagUrl(code) + '" alt="" width="20" height="20" loading="lazy" draggable="false" ' +
+        'onerror="this.style.display=\'none\'">';
+    }
+    if (langCode) {
+      langCode.textContent = getLangLabel(code);
+    }
+  }
+
+  /* ── Lista de Países ── */
+  function renderList(query) {
+    var q = normalize(query.trim());
+    var filtered = q
+      ? countries.filter(function(c) {
+          return normalize(c.name).indexOf(q) !== -1 ||
+                 c.code.toLowerCase() === q ||
+                 getLangLabel(c.code).toLowerCase() === q;
+        })
+      : countries;
+
+    if (filtered.length === 0) {
+      langList.innerHTML = '<div class="lang-empty">No results found.</div>';
+      return;
+    }
+
+    var checkSVG =
+      '<svg class="lang-check" viewBox="0 0 20 20" fill="none" aria-hidden="true">' +
+      '<path d="M4 10.5l4 4 8-9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '</svg>';
+
+    var html = filtered.map(function(c) {
+      var isSel = c.code === selected;
+      var sigla = getLangLabel(c.code);
+      return (
+        '<button class="lang-item' + (isSel ? ' lang-item--selected' : '') + '" ' +
+        'role="option" aria-selected="' + isSel + '" data-code="' + c.code + '">' +
+        '<span class="lang-item-flag">' +
+        '<img src="' + flagUrl(c.code) + '" alt="" width="34" height="34" loading="lazy" draggable="false" ' +
+        'onerror="this.parentElement.innerHTML=\'\'"></span>' +
+        '<span class="lang-item-code">' + sigla + '</span>' +
+        '<span class="lang-item-name">' + c.name + '</span>' +
+        (isSel ? checkSVG : '') +
+        '</button>'
+      );
+    }).join('');
+
+    langList.innerHTML = html;
+  }
+
+  /* ── Abrir / Fechar Modal ── */
+  function openModal() {
+    loadGoogleTranslate();
+    modal.removeAttribute('hidden');
+    prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    renderList('');
+    setTimeout(function() { if (searchIn) searchIn.focus(); }, 50);
+  }
+
+  function closeModal() {
+    modal.setAttribute('hidden', '');
+    document.body.style.overflow = prevOverflow;
+    if (searchIn) searchIn.value = '';
+  }
+
+  /* ── Selecionar País ── */
+  function choose(code) {
+    selected = code;
+    try { localStorage.setItem(STORAGE_KEY, code); } catch(e) {}
+    updateBtnUI(code);
+    closeModal();
+    var target = LANG_MAP[code] || 'en';
+    setGoogleLang(target);
+  }
+
+  /* ── Eventos ── */
+  langBtn.addEventListener('click', openModal);
+  closeBtn.addEventListener('click', closeModal);
+
+  // Fecha clicando no overlay fora do box
+  modal.addEventListener('click', function(e) {
+    if (!modalBox.contains(e.target)) closeModal();
+  });
+
+  // Fecha com a tecla Esc
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && !modal.hasAttribute('hidden')) closeModal();
+  });
+
+  // Busca em tempo real
+  searchIn.addEventListener('input', function() {
+    renderList(searchIn.value);
+  });
+
+  // Clique em item da lista (delegação de evento)
+  langList.addEventListener('click', function(e) {
+    var item = e.target.closest('[data-code]');
+    if (item) choose(item.dataset.code);
+  });
+
+  // Inicializa o botão na barra
+  updateBtnUI(selected);
+
+})();
+
